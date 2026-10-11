@@ -1,14 +1,17 @@
 -- PUBLISHED INTERFACE. Governed by contracts/accounts.yml.
--- Any change to columns, types, nullability or allowed values here is a contract change.
+-- feat: add branch region for the regional deposits view; align status naming with branch-ops
 create or replace table accounts as
 select
-    account_id,
-    customer_id,
-    branch_id,
-    account_type,
-    account_status,
-    open_date,
-    interest_rate,
-    currency,
-    _loaded_at
-from stg_accounts;
+    a.account_id,
+    a.customer_id,
+    a.branch_id,
+    a.account_type,
+    a.account_status as status,
+    a.open_date,
+    a.interest_rate,
+    a.currency,
+    a._loaded_at,
+    b.region
+from stg_accounts a
+left join stg_branch_history b      -- history has region over time
+    on a.branch_id = b.branch_id;

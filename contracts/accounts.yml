@@ -6,7 +6,7 @@
 apiVersion: lumen.datacontract/v1
 kind: DataContract
 id: lumen.deposits.accounts
-version: 1.0.0
+version: 1.1.0
 status: active
 
 info:
@@ -59,7 +59,7 @@ schema:
       type: VARCHAR
       nullable: false
       allowed_values: [CHECKING, SAVINGS, MONEY_MARKET, CD]
-    - name: account_status
+    - name: status
       type: VARCHAR
       nullable: false
       allowed_values: [ACTIVE, DORMANT, CLOSED]
@@ -80,6 +80,10 @@ schema:
       type: TIMESTAMP
       nullable: false
       description: UTC load timestamp from the core extract. Drives freshness.
+    - name: region
+      type: VARCHAR
+      nullable: true
+      description: Branch region.
 
 quality:
   row_count: {min: 1000}
@@ -122,3 +126,6 @@ changelog:
   - version: 1.0.0
     date: "2026-07-01"
     summary: Initial contract after Q2 deposits-packet fan-out incident.
+  - version: 1.1.0
+    date: "2026-10-12"
+    summary: Add region; rename account_status to status to match branch-ops naming.
