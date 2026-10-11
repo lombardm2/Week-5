@@ -1,0 +1,71 @@
+# On merge to main: re-run the full gate on the merge commit (catches semantic merge
+# conflicts between two individually-green PRs), then promote an immutable release to
+# staging and tag it. Tags are the rollback targets.
+name: promote-to-staging
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write                 # push release tags
+
+concurrency:
+  group: deploy-staging           # shared with rollback-staging.yml: deploys never interleave
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    uses: ./.github/workflows/pr-gate.yml
+    with:
+      base_ref: ${{ github.event.before }}
+
+  promote:
+    name: promote
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging               # add required reviewers / wait timer in repo settings if desired
+    env:
+      RELEASE_ROOT: ${{ vars.RELEASE_ROOT || '/tmp/lumen-environments' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Build release candidate
+        run: |
+          python generator/generate_core_banking.py --out data/raw
+          python pipeline/build.py
+      - name: Compute release id
+        id: rel
+        run: echo "id=staging-$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Promote (immutable release + atomic pointer swap)
+        run: python scripts/promote.py --env staging promote --release-id "${{ steps.rel.outputs.id }}" --reason "merge ${GITHUB_SHA::7}"
+      - name: Post-promotion smoke check (contract against the promoted release)
+        run: |
+          CURRENT=$(cat "$RELEASE_ROOT/staging/CURRENT")
+          python scripts/validate_contract.py --contract contracts/accounts.yml \
+            --warehouse "$RELEASE_ROOT/staging/releases/$CURRENT/warehouse.duckdb"
+      - name: Tag release (rollback target)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.rel.outputs.id }}" -m "Promoted to staging by ${GITHUB_ACTOR}"
+          git push origin "${{ steps.rel.outputs.id }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.rel.outputs.id }}
+          path: ${{ env.RELEASE_ROOT }}/staging/releases/${{ steps.rel.outputs.id }}/
+          retention-days: 90
+      - name: Summary
+        run: |
+          {
+            echo "### Promoted to staging: \`${{ steps.rel.outputs.id }}\`"
+            echo ""
+            echo "Rollback: Actions → **rollback-staging** → Run workflow → \`release_tag\` = a previous \`staging-*\` tag. See docs/ROLLBACK.md."
+            python scripts/promote.py --env staging status | sed 's/^/    /'
+          } >> "$GITHUB_STEP_SUMMARY"

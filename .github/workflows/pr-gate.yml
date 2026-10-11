@@ -1,0 +1,131 @@
+# Data-quality gate. Runs on every PR to main (required status check: `gate`) and is
+# reused by promote-staging.yml and rollback-staging.yml so nothing reaches staging
+# without passing the identical controls.
+name: data-quality-gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (default: the triggering commit)"
+        type: string
+        default: ""
+      base_ref:
+        description: Ref whose contracts are the baseline for the breaking-change diff
+        type: string
+        default: ""
+      policy_mode:
+        description: enforce | warn  (warn is used only for audited rollbacks)
+        type: string
+        default: enforce
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  layered-tests:
+    name: layered-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Generate synthetic core-banking data (planted defects)
+        run: python generator/generate_core_banking.py --out data/raw
+      - name: Build warehouse (raw -> staging/quarantine -> accounts -> marts)
+        run: python pipeline/build.py
+      - name: Layered tests (calibration, schema, PK, not-null, FK, business rules, grain, validator)
+        run: python -m pytest --junitxml=build/junit.xml
+      - name: Test summary
+        if: always()
+        run: python scripts/junit_summary.py build/junit.xml
+      - name: Export review queues (spike exceptions, quarantines)
+        if: always()
+        run: python scripts/export_review_queues.py || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: layered-tests-evidence-${{ github.run_attempt }}
+          path: |
+            build/junit.xml
+            build/build_manifest.json
+            build/review_queues/
+            data/raw/_manifest.json
+          retention-days: 30
+
+  contract-validation:
+    name: contract-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0            # need the base ref's contract for the change-policy diff
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Generate and build
+        run: |
+          python generator/generate_core_banking.py --out data/raw
+          python pipeline/build.py
+      - name: Resolve change-policy baseline
+        id: base
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.base_ref }}
+          INPUT_BASE: ${{ inputs.base_ref }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then BASE="origin/$PR_BASE"
+          elif [ -n "$INPUT_BASE" ] && [ "$INPUT_BASE" != "0000000000000000000000000000000000000000" ]; then BASE="$INPUT_BASE"
+          else BASE=""; fi
+          echo "Baseline for breaking-change diff: ${BASE:-<none>}"
+          echo "ref=$BASE" >> "$GITHUB_OUTPUT"
+      - name: Validate contracts (structure + data + breaking-change policy)
+        env:
+          BASE_REF: ${{ steps.base.outputs.ref }}
+          MODE: ${{ inputs.policy_mode || 'enforce' }}
+        run: scripts/validate_contracts.sh "$BASE_REF" "$MODE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-reports-${{ github.run_attempt }}
+          path: build/contracts/
+          retention-days: 30
+
+  gate:
+    # The single required status check in branch protection. Fails closed: anything
+    # other than success (failure, cancelled, skipped) blocks the merge.
+    name: gate
+    if: always()
+    needs: [layered-tests, contract-validation]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every control to pass
+        env:
+          TESTS: ${{ needs.layered-tests.result }}
+          CONTRACT: ${{ needs.contract-validation.result }}
+        run: |
+          echo "layered-tests:       $TESTS"
+          echo "contract-validation: $CONTRACT"
+          if [ "$TESTS" != "success" ] || [ "$CONTRACT" != "success" ]; then
+            echo "::error title=Merge blocked::Data-quality gate failed. See the failing job's log and step summary."
+            exit 1
+          fi
+          echo "All data controls passed."

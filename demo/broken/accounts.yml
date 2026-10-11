@@ -1,0 +1,131 @@
+# =============================================================================
+# DATA CONTRACT: accounts  (producer: Analytics Engineering)
+# Machine-readable. Enforced by scripts/validate_contract.py on every PR and on
+# every promotion. Changes to this file require consumer approval (CODEOWNERS).
+# =============================================================================
+apiVersion: lumen.datacontract/v1
+kind: DataContract
+id: lumen.deposits.accounts
+version: 1.1.0
+status: active
+
+info:
+  title: Accounts — published deposit account interface
+  description: >
+    One row per deposit account in good standing (passed key and referential
+    validation). Accounts failing validation are held in quarantine_accounts
+    with a reason code and are NOT in this table.
+  producer:
+    team: analytics-engineering
+    owner: analytics-engineering@lumenbank.example
+    escalation: "#data-incidents"
+  consumers:
+    - team: finance-reporting
+      use: CFO weekly deposits packet (via fct_branch_deposits_daily); filters on account_status
+      contact: fp-and-a@lumenbank.example
+    - team: branch-operations
+      use: Branch manager balance reconciliation dashboard
+      contact: branch-ops@lumenbank.example
+    - team: regulatory-reporting
+      use: Call Report Schedule RC-E deposit composition (account_type)
+      contact: reg-reporting@lumenbank.example
+
+dataset:
+  warehouse: duckdb
+  table: accounts
+  grain: one row per account_id
+  primary_key: [account_id]
+
+schema:
+  additional_columns: forbid     # the published column list is exhaustive
+  columns:
+    - name: account_id
+      type: VARCHAR
+      nullable: false
+      pattern: '^ACC-[0-9]{7}$'
+      description: Core-system account number.
+    - name: customer_id
+      type: VARCHAR
+      nullable: false
+      pattern: '^C[0-9]{6}$'
+      references: {table: stg_customers, column: customer_id}
+      description: Primary account holder.
+    - name: branch_id
+      type: INTEGER
+      nullable: false
+      references: {table: stg_branches, column: branch_id}
+      description: Domicile branch. References the CURRENT branch version only.
+    - name: account_type
+      type: VARCHAR
+      nullable: false
+      allowed_values: [CHECKING, SAVINGS, MONEY_MARKET, CD]
+    - name: status
+      type: VARCHAR
+      nullable: false
+      allowed_values: [ACTIVE, DORMANT, CLOSED]
+    - name: open_date
+      type: DATE
+      nullable: false
+      range: {min: "1990-01-01", max: today}
+    - name: interest_rate
+      type: DECIMAL(6,4)
+      nullable: false
+      range: {min: 0, max: 0.15}
+      description: Annual rate as a fraction (0.0425 = 4.25%).
+    - name: currency
+      type: VARCHAR
+      nullable: false
+      allowed_values: [USD]
+    - name: _loaded_at
+      type: TIMESTAMP
+      nullable: false
+      description: UTC load timestamp from the core extract. Drives freshness.
+    - name: region
+      type: VARCHAR
+      nullable: true
+      description: Branch region.
+
+quality:
+  row_count: {min: 1000}
+
+freshness:
+  column: _loaded_at
+  timezone: UTC
+  warn_after_hours: 24
+  error_after_hours: 26
+  rationale: >
+    Core extract lands ~05:00 CT daily; CFO packet builds 07:00 CT Monday.
+    26h tolerates one late extract without serving a two-day-old snapshot.
+
+breaking_change_policy:
+  versioning: semver
+  deprecation_window_days: 30
+  breaking:                       # require MAJOR bump + changelog migration + consumer sign-off
+    - column_removed              # a rename is detected as removed + added
+    - column_type_changed         # except the widenings listed below
+    - nullable_relaxed            # false -> true
+    - allowed_values_expanded     # consumers may not handle new codes
+    - range_widened
+    - pattern_changed
+    - primary_key_changed
+    - table_renamed
+    - freshness_relaxed
+  non_breaking:                   # require at least MINOR bump
+    - column_added
+    - nullable_tightened
+    - allowed_values_narrowed
+    - range_narrowed
+    - freshness_tightened
+  allowed_type_widenings:
+    - {from: INTEGER, to: BIGINT}
+    - {from: "DECIMAL(p,s)", to: "DECIMAL(p2,s) where p2 > p"}
+  major_bump_requires: [changelog.breaking, changelog.migration, changelog.consumer_signoff]
+  approvals: CODEOWNERS on /contracts/ (producer + every listed consumer team)
+
+changelog:
+  - version: 1.0.0
+    date: "2026-07-01"
+    summary: Initial contract after Q2 deposits-packet fan-out incident.
+  - version: 1.1.0
+    date: "2026-10-12"
+    summary: Add region; rename account_status to status to match branch-ops naming.

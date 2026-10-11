@@ -1,0 +1,6 @@
+data/
+build/
+.environments/
+__pycache__/
+.pytest_cache/
+*.pyc

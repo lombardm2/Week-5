@@ -1,0 +1,85 @@
+# Manual, audited rollback: re-deploy a previously promoted, tagged release.
+# The tag's code is re-validated by the same gate before it is served again.
+name: rollback-staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Known-good staging tag to restore (e.g. staging-20261012T140000Z-abc1234)
+        required: true
+        type: string
+      reason:
+        description: Incident ticket / reason (recorded in the audit log and tag message)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag must exist and be a staging release
+        env:
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          [[ "$TAG" =~ ^staging-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$ ]] || { echo "::error::not a staging release tag: $TAG"; exit 1; }
+          git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "::error::tag not found: $TAG"; exit 1; }
+
+  gate:
+    needs: verify-tag
+    uses: ./.github/workflows/pr-gate.yml
+    with:
+      ref: ${{ inputs.release_tag }}
+      base_ref: ${{ github.sha }}       # diff = what consumers lose relative to current main
+      policy_mode: warn                 # surface contract regressions loudly, but allow the rollback
+
+  redeploy:
+    needs: gate
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    env:
+      RELEASE_ROOT: ${{ vars.RELEASE_ROOT || '/tmp/lumen-environments' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Rebuild the tagged release
+        run: |
+          python generator/generate_core_banking.py --out data/raw
+          python pipeline/build.py
+      - name: Promote as a rollback release
+        id: rel
+        env:
+          TAG: ${{ inputs.release_tag }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          ID="rollback-$(date -u +%Y%m%dT%H%M%SZ)-of-${TAG#staging-}"
+          python scripts/promote.py --env staging promote --release-id "$ID" --reason "ROLLBACK to $TAG: $REASON"
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+      - name: Summary
+        env:
+          TAG: ${{ inputs.release_tag }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          {
+            echo "### Staging rolled back to \`$TAG\`"
+            echo "Reason: $REASON — by @${GITHUB_ACTOR}"
+            echo ""
+            echo "Next: revert the offending PR on main (it must pass the gate) and notify consumers listed in contracts/accounts.yml."
+          } >> "$GITHUB_STEP_SUMMARY"

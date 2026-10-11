@@ -1,0 +1,54 @@
+# Expected physical schemas (ordered) for internal tables.
+# The published `accounts` table is NOT listed here: its schema lives in contracts/accounts.yml.
+stg_branch_history:
+  branch_id: INTEGER
+  branch_name: VARCHAR
+  region: VARCHAR
+  branch_manager: VARCHAR
+  valid_from: DATE
+  valid_to: DATE
+  is_current: BOOLEAN
+stg_branches:
+  branch_id: INTEGER
+  branch_name: VARCHAR
+  region: VARCHAR
+  branch_manager: VARCHAR
+  valid_from: DATE
+stg_customers:
+  customer_id: VARCHAR
+  first_name: VARCHAR
+  last_name: VARCHAR
+  date_of_birth: DATE
+  segment: VARCHAR
+  home_branch_id: INTEGER
+  created_at: TIMESTAMP
+stg_accounts:
+  account_id: VARCHAR
+  customer_id: VARCHAR
+  branch_id: INTEGER
+  account_type: VARCHAR
+  account_status: VARCHAR
+  open_date: DATE
+  interest_rate: DECIMAL(6,4)
+  currency: VARCHAR
+  _loaded_at: TIMESTAMP
+stg_daily_balances:
+  account_id: VARCHAR
+  balance_date: DATE
+  ledger_balance: DECIMAL(18,2)
+exceptions_balance_spikes:
+  account_id: VARCHAR
+  balance_date: DATE
+  prev_date: DATE
+  prev_balance: DECIMAL(18,2)
+  ledger_balance: DECIMAL(18,2)
+  pct_move: DOUBLE
+fct_branch_deposits_daily:
+  branch_id: INTEGER
+  branch_name: VARCHAR
+  region: VARCHAR
+  balance_date: DATE
+  n_accounts: BIGINT
+  n_customers: BIGINT
+  total_balance: DECIMAL(38,2)
+  avg_customer_balance: DECIMAL(18,2)

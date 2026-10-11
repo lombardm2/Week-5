@@ -1,0 +1,7 @@
+# Contract changes need the producer AND every consumer team named in the contract.
+/contracts/                     @lumen-bank/analytics-engineering @lumen-bank/finance-reporting @lumen-bank/branch-operations @lumen-bank/regulatory-reporting
+/models/marts/10_accounts.sql   @lumen-bank/analytics-engineering @lumen-bank/finance-reporting
+# The controls themselves: weakening a test or the gate is reviewed by the platform owner.
+/tests/                         @lumen-bank/data-platform
+/.github/                       @lumen-bank/data-platform
+/scripts/validate_contract.py   @lumen-bank/data-platform
