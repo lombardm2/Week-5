@@ -1,8 +1,13 @@
-# Manual, audited rollback: re-deploy a previously promoted, tagged release.
-# The tag's code is re-validated by the same gate before it is served again.
+# Audited rollback: re-deploy a previously promoted, tagged release.
+# Two ways to trigger it, both recorded:
+#   git:  git tag -a rollback/<staging-tag> origin/main -m "<reason>" && git push origin rollback/<staging-tag>
+#   web:  Actions -> rollback-staging -> Run workflow
+# The target release is re-validated by the same gate before it is served again.
 name: rollback-staging
 
 on:
+  push:
+    tags: ["rollback/staging-*"]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -10,7 +15,7 @@ on:
         required: true
         type: string
       reason:
-        description: Incident ticket / reason (recorded in the audit log and tag message)
+        description: Incident ticket / reason (recorded in the audit log)
         required: true
         type: string
 
@@ -22,38 +27,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-tag:
+  resolve:
+    name: resolve-target
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.r.outputs.tag }}
+      reason: ${{ steps.r.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Tag must exist and be a staging release
+      - name: Resolve target release and reason
+        id: r
         env:
-          TAG: ${{ inputs.release_tag }}
-        run: |
-          [[ "$TAG" =~ ^staging-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$ ]] || { echo "::error::not a staging release tag: $TAG"; exit 1; }
-          git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "::error::tag not found: $TAG"; exit 1; }
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          IN_TAG: ${{ inputs.release_tag }}
+          IN_REASON: ${{ inputs.reason }}
+        run: scripts/resolve_rollback.sh
 
   gate:
-    needs: verify-tag
+    needs: resolve
     uses: ./.github/workflows/pr-gate.yml
     with:
-      ref: ${{ inputs.release_tag }}
+      ref: ${{ needs.resolve.outputs.tag }}
       base_ref: ${{ github.sha }}       # diff = what consumers lose relative to current main
       policy_mode: warn                 # surface contract regressions loudly, but allow the rollback
 
   redeploy:
-    needs: gate
+    needs: [resolve, gate]
     runs-on: ubuntu-latest
     environment:
       name: staging
     env:
       RELEASE_ROOT: ${{ vars.RELEASE_ROOT || '/tmp/lumen-environments' }}
+      TAG: ${{ needs.resolve.outputs.tag }}
+      REASON: ${{ needs.resolve.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ needs.resolve.outputs.tag }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -64,22 +77,15 @@ jobs:
           python generator/generate_core_banking.py --out data/raw
           python pipeline/build.py
       - name: Promote as a rollback release
-        id: rel
-        env:
-          TAG: ${{ inputs.release_tag }}
-          REASON: ${{ inputs.reason }}
         run: |
           ID="rollback-$(date -u +%Y%m%dT%H%M%SZ)-of-${TAG#staging-}"
           python scripts/promote.py --env staging promote --release-id "$ID" --reason "ROLLBACK to $TAG: $REASON"
-          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "ROLLBACK_ID=$ID" >> "$GITHUB_ENV"
       - name: Summary
-        env:
-          TAG: ${{ inputs.release_tag }}
-          REASON: ${{ inputs.reason }}
         run: |
           {
-            echo "### Staging rolled back to \`$TAG\`"
-            echo "Reason: $REASON — by @${GITHUB_ACTOR}"
+            echo "### Staging rolled back to \`$TAG\` as \`$ROLLBACK_ID\`"
+            echo "Reason: $REASON (requested by @${GITHUB_ACTOR} via ${{ github.event_name }})"
             echo ""
-            echo "Next: revert the offending PR on main (it must pass the gate) and notify consumers listed in contracts/accounts.yml."
+            echo "Next: revert the offending change on main (it must pass the gate) and notify the consumers listed in contracts/accounts.yml."
           } >> "$GITHUB_STEP_SUMMARY"

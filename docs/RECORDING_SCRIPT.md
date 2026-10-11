@@ -1,6 +1,7 @@
 # Recording script (~12 minutes)
 
-Drive the GitHub portion with `scripts/demo_pr_flow.sh` (it pauses between steps).
+Drive the GitHub portion with `bash scripts/demo_git_only.sh` (plain git; it pauses between
+steps). Setup and run order: `docs/RUN_ORDER_GIT_ONLY.md`.
 Numbers below are from `docs/evidence/`. The generator is seeded, so counts reproduce exactly;
 dates shift with the run date.
 
@@ -40,8 +41,12 @@ dates shift with the run date.
 
 ## Scene 3: Branch protection (3:00–3:30)
 
-**Screen:** Settings → Branches → `main`, showing required checks `gate`, `layered-tests`,
-`contract-validation`, with "include administrators" enabled.
+**Screen:** Settings → Branches → rule for `main`: required checks `gate`, `layered-tests`,
+`contract-validation`; "Do not allow bypassing" ticked. (On the first run you create this rule
+right after the PR's checks have run once, since GitHub only offers check names it has seen.)
+
+> `gate` is the single required check. It fails closed: if either job fails, is cancelled or
+> is skipped, the merge is blocked. Bypassing is off, so that includes me as repo owner.
 
 ## Scene 4: The breaking PR (3:30–4:30)
 
@@ -51,7 +56,17 @@ dates shift with the run date.
 > because that's where region lives, and while they're in there renames `account_status` to
 > `status` to match branch ops. They did update the contract, and called it a minor bump.
 
-**Screen:** Checks tab turns red. Then `gh pr merge` → refused by base branch policy.
+**Screen:** Checks tab turns red. Then in Terminal, the script tries to merge by pushing the
+branch to `main`:
+
+```
+$ git push origin feature/branch-region-enrichment:main
+remote: error: GH006: Protected branch update failed for refs/heads/main.
+remote: error: Required status check "gate" is failing.
+ ! [remote rejected] feature/branch-region-enrichment -> main
+```
+
+> That's the gate blocking the change: not a reviewer catching it, the platform refusing it.
 
 ## Scene 5: Reading the failures (4:30–9:30), the core of the recording
 
@@ -171,14 +186,23 @@ failure with no data symptom anywhere in the repo.
 > three consumer teams, and the validator enforces each of those.
 
 **Screen:** checks turn green (106 tests; 35/35 contract data checks; policy: `column_added`
-additive). Merge. *promote-to-staging* run: gate re-runs on the merge commit, promotes, smoke
-check passes, tag `staging-…` created.
+additive). The same `git push origin feature/branch-region-enrichment:main` is now **accepted**,
+and the PR page shows **Merged**. Then the *promote-to-staging* run: the gate re-runs on the merge
+commit, promotes, the smoke check passes, and a `staging-…` tag is created.
 
 ## Scene 7: Rollback (10:45–11:45)
 
-**Screen:** Actions → *rollback-staging* inputs, then `docs/evidence/04_rollback_drill.log`.
+**Screen:** Terminal, where the script pushes the rollback request as a git tag:
 
-> Rollback is a pointer swap to an immutable, tagged release, re-validated by the same gate.
+```
+$ git tag -a rollback/staging-<previous> origin/main -m "INC-0042 rollback drill"
+$ git push origin rollback/staging-<previous>
+```
+
+then Actions → *rollback-staging* run summary, then `docs/evidence/04_rollback_drill.log`.
+
+> Rollback re-deploys an immutable, tagged release, re-validated by the same gate. The
+> rollback tag is the audit record: who asked, when, and why.
 > It refuses without a reason or an unknown tag, it's serialized with promotions, and in warn
 > mode it tells you which columns consumers lose. In this drill, rolling back to 1.0.0 removes
 > `region`. Then revert the PR on main so the next merge doesn't redeploy it.

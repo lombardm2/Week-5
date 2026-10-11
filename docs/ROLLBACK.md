@@ -13,11 +13,18 @@ Rolling back means serving a previous release again. It never means hand-editing
 
 ## A. Rollback workflow (default)
 
-1. Find the last good tag: `git tag -l 'staging-*' --sort=-creatordate | head` (or the
-   *promote-to-staging* run summaries).
-2. Actions → **rollback-staging** → Run workflow:
-   - `release_tag`: the known-good tag
-   - `reason`: incident ticket, e.g. `INC-0042 accounts fan-out`
+1. Find the last good tag. Names embed a UTC timestamp, so name order is time order:
+   `git ls-remote --tags --refs origin 'staging-*' | awk '{print $2}' | sort | tail -5`
+2. Trigger the rollback **with git** (the annotated tag message is the reason, and the tag itself
+   is the audit record):
+   ```
+   git fetch origin
+   git tag -a rollback/<staging-tag> origin/main -m "INC-0042 accounts fan-out"
+   git push origin rollback/<staging-tag>
+   ```
+   Or from the web: Actions → **rollback-staging** → Run workflow (`release_tag`, `reason`).
+   Both routes refuse unknown tags, non-staging tags and blank reasons
+   (`scripts/resolve_rollback.sh`).
 3. The workflow verifies the tag, re-runs the full gate on the tagged code with the contract
    policy in **warn** mode (the step summary lists what consumers lose relative to `main`),
    then redeploys it as `rollback-<UTC>-of-<tag>` under the `staging` environment.

@@ -47,26 +47,24 @@ contracts/accounts.yml               producer-consumer contract (+ _meta/ JSON S
 scripts/validate_contract.py         contract validator (exit non-zero on violation)
 scripts/promote.py                   immutable releases + atomic pointer swap; rollback; audit log
 tests/                               layers 00–07
-.github/workflows/                   pr-gate (reusable), promote-staging, rollback-staging
+.github/workflows/                   pr-gate (reusable), promote-staging, rollback-staging (git tag or web)
 demo/                                the deliberately broken PR and its fix
 docs/evidence/                       captured gate output for every step of the demo
 docs/RECORDING_SCRIPT.md             walkthrough + per-check root-cause narration
 ```
 
-## One-time GitHub setup
+## Running the demo on GitHub (git only)
 
-```
-gh repo create lumen-bank/lumen-deposits-controls --private
-git remote add origin git@github.com:lumen-bank/lumen-deposits-controls.git
-git push origin github-demo-start:main --tags     # pre-PR state; the demo opens PR #1 live
-scripts/setup_github.sh lumen-bank/lumen-deposits-controls     # add --solo-demo to record alone
-scripts/demo_pr_flow.sh                                         # broken PR -> blocked -> fix -> merge -> promote
-```
+Follow **[docs/RUN_ORDER_GIT_ONLY.md](docs/RUN_ORDER_GIT_ONLY.md)**. In short: create an empty
+public repo on github.com, `git push origin github-demo-start:main`, then run
+`bash scripts/demo_git_only.sh`. It opens the breaking PR, shows `git push` to `main` being
+**rejected** by the gate, pushes the fix, shows the same push **accepted**, and triggers the
+rollback by pushing a `rollback/<staging-tag>` git tag.
 
-`main` in this local repo already contains the dry-run merge (see `docs/evidence/`);
+`main` in this local repo already contains a dry-run merge (see `docs/evidence/`);
 `github-demo-start` is the same code before PR #1, which is what the live demo needs.
-`setup_github.sh` makes `gate`, `layered-tests` and `contract-validation` required, includes
-admins, and requires CODEOWNERS review (contract changes need every consumer team).
+If you do have the GitHub CLI, `scripts/setup_github.sh` and `scripts/demo_pr_flow.sh` automate
+the same steps.
 
 ## Scope notes
 
