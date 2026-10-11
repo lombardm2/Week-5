@@ -59,7 +59,7 @@ schema:
       type: VARCHAR
       nullable: false
       allowed_values: [CHECKING, SAVINGS, MONEY_MARKET, CD]
-    - name: status
+    - name: account_status
       type: VARCHAR
       nullable: false
       allowed_values: [ACTIVE, DORMANT, CLOSED]
@@ -82,8 +82,8 @@ schema:
       description: UTC load timestamp from the core extract. Drives freshness.
     - name: region
       type: VARCHAR
-      nullable: true
-      description: Branch region.
+      nullable: false
+      description: Region of the CURRENT branch version (from stg_branches, not branch history).
 
 quality:
   row_count: {min: 1000}
@@ -128,4 +128,4 @@ changelog:
     summary: Initial contract after Q2 deposits-packet fan-out incident.
   - version: 1.1.0
     date: "2026-10-12"
-    summary: Add region; rename account_status to status to match branch-ops naming.
+    summary: Additive - region from the current branch version. account_status unchanged.
