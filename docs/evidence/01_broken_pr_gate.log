@@ -1,6 +1,5 @@
 ================ DATA-QUALITY GATE (base: main) ================
 Generated as_of=2026-10-10: branches=51, customers=3,000, accounts=4,503, daily_balances=270,124
-<jemalloc>: Out-of-range conf value: narenas:0
   built models/staging/01_stg_branches.sql
   built models/staging/02_stg_customers.sql
   built models/staging/03_stg_accounts.sql
@@ -39,7 +38,7 @@ tests/test_03_not_null.py .........................                      [ 58%]
 tests/test_04_relationships.py ...........                               [ 68%]
 tests/test_05_business_rules.py ....                                     [ 72%]
 tests/test_06_grain_reconciliation.py FF..                               [ 76%]
-tests/test_07_contract_validator.py .FF..............FFFF...F            [100%]
+tests/test_07_contract_validator.py .........................            [100%]
 
 =================================== FAILURES ===================================
 ________________ test_primary_key_unique[accounts[account_id]] _________________
@@ -60,120 +59,15 @@ E   AssertionError: 60 days where mart != ledger. first: date=2026-08-12 ledger=
 E       Branch-level ratios mart/ledger on 2026-08-12: [(104, 2.0), (113, 2.0), (115, 2.0), (120, 2.0), (127, 2.0), (130, 2.0), (135, 2.0), (137, 2.0), (142, 2.0)]
 E       Integer ratios on a subset of branches = rows duplicated by a join, not bad source data.
 E   assert not [(datetime.date(2026, 8, 12), Decimal('39217868.56'), Decimal('47428205.56'), Decimal('8210337.00')), (datetime.date(2...232142.35')), (datetime.date(2026, 8, 17), Decimal('39268007.11'), Decimal('47502757.52'), Decimal('8234750.41')), ...]
-________________ test_change_classification[<lambda>-expected1] ________________
-tests/test_07_contract_validator.py:54: in test_change_classification
-    mutate(head)
-tests/test_07_contract_validator.py:35: in <lambda>
-    (lambda c: col(c, "account_status").update(name="status"), ("column_removed", True)),
-               ^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_07_contract_validator.py:26: in col
-    return next(x for x in c["schema"]["columns"] if x["name"] == name)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   StopIteration
-________________ test_change_classification[<lambda>-expected2] ________________
-tests/test_07_contract_validator.py:55: in test_change_classification
-    assert expected in kinds(BASE, head)
-E   AssertionError: assert ('column_added', False) in set()
-E    +  where set() = kinds({'apiVersion': 'lumen.datacontract/v1', 'kind': 'DataContract', 'id': 'lumen.deposits.accounts', 'version': '1.1.0', ...}, {'apiVersion': 'lumen.datacontract/v1', 'kind': 'DataContract', 'id': 'lumen.deposits.accounts', 'version': '1.1.0', ...})
-__________________ test_breaking_change_with_minor_bump_fails __________________
-tests/test_07_contract_validator.py:72: in test_breaking_change_with_minor_bump_fails
-    head = _with("1.1.0", lambda c: col(c, "account_status").update(name="status"))
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_07_contract_validator.py:61: in _with
-    mutate(head)
-tests/test_07_contract_validator.py:72: in <lambda>
-    head = _with("1.1.0", lambda c: col(c, "account_status").update(name="status"))
-                                    ^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_07_contract_validator.py:26: in col
-    return next(x for x in c["schema"]["columns"] if x["name"] == name)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   StopIteration
-__________ test_breaking_change_with_major_bump_but_no_signoff_fails ___________
-tests/test_07_contract_validator.py:78: in test_breaking_change_with_major_bump_but_no_signoff_fails
-    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"))
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_07_contract_validator.py:61: in _with
-    mutate(head)
-tests/test_07_contract_validator.py:78: in <lambda>
-    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"))
-                                    ^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_07_contract_validator.py:26: in col
-    return next(x for x in c["schema"]["columns"] if x["name"] == name)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   StopIteration
-_________ test_breaking_change_with_major_bump_and_full_signoff_passes _________
-tests/test_07_contract_validator.py:85: in test_breaking_change_with_major_bump_and_full_signoff_passes
-    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"),
-tests/test_07_contract_validator.py:61: in _with
-    mutate(head)
-tests/test_07_contract_validator.py:85: in <lambda>
-    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"),
-                                    ^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_07_contract_validator.py:26: in col
-    return next(x for x in c["schema"]["columns"] if x["name"] == name)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   StopIteration
-____________________ test_additive_change_needs_minor_bump _____________________
-tests/test_07_contract_validator.py:95: in test_additive_change_needs_minor_bump
-    assert _status(f_none, "semver.sufficient_bump") == ["fail"]
-E   AssertionError: assert [] == ['fail']
-E     
-E     Right contains one more item: 'fail'
-E     Use -v to get more diff
-_____________________ test_cli_exits_nonzero_on_stale_data _____________________
-tests/test_07_contract_validator.py:138: in test_cli_exits_nonzero_on_stale_data
-    assert fresh == 0
-E   assert 1 == 0
------------------------------ Captured stdout call -----------------------------
-
-=== CONTRACT VALIDATION: /home/claude/lumen-deposits-controls/contracts/accounts.yml ===
-
-[CONTRACT]
-  ... 1/1 checks passed
-
-[DATA]
-  FAIL  schema.missing_columns             missing: ['status', 'region']
-  FAIL  schema.unexpected_columns          uncontracted columns published: ['account_status']
-  ... 28/30 checks passed
-
-[POLICY]
-  ... 1/1 checks passed
-
-RESULT: FAILED (exit 1: data)
-
-=== CONTRACT VALIDATION: /home/claude/lumen-deposits-controls/contracts/accounts.yml ===
-
-[CONTRACT]
-  ... 1/1 checks passed
-
-[DATA]
-  FAIL  schema.missing_columns             missing: ['status', 'region']
-  FAIL  schema.unexpected_columns          uncontracted columns published: ['account_status']
-  FAIL  freshness                          latest _loaded_at=2026-01-01 05:00:00 age=27.0h (warn>24h, error>26h)
-  ... 27/30 checks passed
-
-[POLICY]
-  ... 1/1 checks passed
-
-RESULT: FAILED (exit 1: data)
 --- generated xml file: /home/claude/lumen-deposits-controls/build/junit.xml ---
 =========================== short test summary info ============================
 FAILED tests/test_02_primary_keys.py::test_primary_key_unique[accounts[account_id]]
 FAILED tests/test_06_grain_reconciliation.py::test_enrichment_preserves_account_cardinality
 FAILED tests/test_06_grain_reconciliation.py::test_mart_reconciles_to_ledger_every_day
-FAILED tests/test_07_contract_validator.py::test_change_classification[<lambda>-expected1]
-FAILED tests/test_07_contract_validator.py::test_change_classification[<lambda>-expected2]
-FAILED tests/test_07_contract_validator.py::test_breaking_change_with_minor_bump_fails
-FAILED tests/test_07_contract_validator.py::test_breaking_change_with_major_bump_but_no_signoff_fails
-FAILED tests/test_07_contract_validator.py::test_breaking_change_with_major_bump_and_full_signoff_passes
-FAILED tests/test_07_contract_validator.py::test_additive_change_needs_minor_bump
-FAILED tests/test_07_contract_validator.py::test_cli_exits_nonzero_on_stale_data
-======================== 10 failed, 95 passed in 1.34s =========================
-<jemalloc>: Out-of-range conf value: narenas:0
+======================== 3 failed, 102 passed in 1.19s =========================
 
 ---------------- job: contract-validation ----------------
 Change-policy base: main:contracts/accounts.yml (version 1.0.0)
-<jemalloc>: Out-of-range conf value: narenas:0
 
 === CONTRACT VALIDATION: contracts/accounts.yml ===
 
