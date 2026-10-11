@@ -10,6 +10,11 @@ mkdir -p "$EVID"
 pause() { read -r -p $'\n>>> '"$1"$' [enter] '; }
 
 git checkout main && git pull --ff-only
+if cmp -s models/marts/10_accounts.sql demo/fixed/10_accounts.sql; then
+  echo "main already contains the fix. Push the pre-PR state first:"
+  echo "  git push --force origin github-demo-start:main"
+  exit 1
+fi
 git checkout -B "$BRANCH"
 cp demo/broken/10_accounts.sql models/marts/10_accounts.sql
 cp demo/broken/accounts.yml    contracts/accounts.yml
