@@ -1,0 +1,201 @@
+================ DATA-QUALITY GATE (base: main) ================
+Generated as_of=2026-10-10: branches=51, customers=3,000, accounts=4,503, daily_balances=270,124
+<jemalloc>: Out-of-range conf value: narenas:0
+  built models/staging/01_stg_branches.sql
+  built models/staging/02_stg_customers.sql
+  built models/staging/03_stg_accounts.sql
+  built models/staging/04_stg_daily_balances.sql
+  built models/marts/10_accounts.sql
+  built models/marts/20_exceptions_balance_spikes.sql
+  built models/marts/30_fct_branch_deposits_daily.sql
+  accounts                       5,436
+  dq_issues                          2
+  exceptions_balance_spikes         10
+  fct_branch_deposits_daily      2,520
+  quarantine_accounts               18
+  quarantine_daily_balances      1,207
+  raw_accounts                   4,503
+  raw_branches                      51
+  raw_customers                  3,000
+  raw_daily_balances           270,124
+  stg_accounts                   4,482
+  stg_branch_history                51
+  stg_branches                      42
+  stg_customers                  3,000
+  stg_daily_balances           268,917
+
+---------------- job: layered-tests ----------------
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/claude/lumen-deposits-controls
+configfile: pytest.ini
+testpaths: tests
+collected 105 items
+
+tests/test_00_detector_calibration.py ..........                         [  9%]
+tests/test_01_schema_types.py ................                           [ 24%]
+tests/test_02_primary_keys.py ....F.....                                 [ 34%]
+tests/test_03_not_null.py .........................                      [ 58%]
+tests/test_04_relationships.py ...........                               [ 68%]
+tests/test_05_business_rules.py ....                                     [ 72%]
+tests/test_06_grain_reconciliation.py FF..                               [ 76%]
+tests/test_07_contract_validator.py .FF..............FFFF...F            [100%]
+
+=================================== FAILURES ===================================
+________________ test_primary_key_unique[accounts[account_id]] _________________
+tests/test_02_primary_keys.py:24: in test_primary_key_unique
+    assert not dups, f"{table}: {len(dups)} duplicated keys {cols}; sample: {sample(dups)}{hint}"
+E   AssertionError: accounts: 954 duplicated keys ['account_id']; sample: ('ACC-0000004', 2), ('ACC-0000005', 2), ('ACC-0000007', 2), ('ACC-0000012', 2), ('ACC-0000013', 2) ... (+949 more)
+E       DIAGNOSIS: 954 duplicated account_ids; 954 sit on branch_ids with >1 history version; 954 have multiplicity == version count; branch_ids involved: [104, 113, 115, 120, 127, 130, 135, 137, 142]. ROOT-CAUSE SIGNATURE: join fan-out against SCD2 history (join on branch_id without is_current / validity-window predicate).
+E   assert not [('ACC-0000004', 2), ('ACC-0000005', 2), ('ACC-0000007', 2), ('ACC-0000012', 2), ('ACC-0000013', 2), ('ACC-0000019', 2), ...]
+________________ test_enrichment_preserves_account_cardinality _________________
+tests/test_06_grain_reconciliation.py:14: in test_enrichment_preserves_account_cardinality
+    assert published == staged == distinct, (
+E   AssertionError: stg_accounts=4,482 rows -> accounts=5,436 rows (4,482 distinct). Enrichment changed row count by +954: a join to a non-unique key.
+E   assert 5436 == 4482
+___________________ test_mart_reconciles_to_ledger_every_day ___________________
+tests/test_06_grain_reconciliation.py:37: in test_mart_reconciles_to_ledger_every_day
+    assert not breaks, (f"{len(breaks)} days where mart != ledger. first: date={breaks[0][0]} "
+E   AssertionError: 60 days where mart != ledger. first: date=2026-08-12 ledger=39,217,868.56 mart=47,428,205.56 delta=+8,210,337.00
+E       Branch-level ratios mart/ledger on 2026-08-12: [(104, 2.0), (113, 2.0), (115, 2.0), (120, 2.0), (127, 2.0), (130, 2.0), (135, 2.0), (137, 2.0), (142, 2.0)]
+E       Integer ratios on a subset of branches = rows duplicated by a join, not bad source data.
+E   assert not [(datetime.date(2026, 8, 12), Decimal('39217868.56'), Decimal('47428205.56'), Decimal('8210337.00')), (datetime.date(2...232142.35')), (datetime.date(2026, 8, 17), Decimal('39268007.11'), Decimal('47502757.52'), Decimal('8234750.41')), ...]
+________________ test_change_classification[<lambda>-expected1] ________________
+tests/test_07_contract_validator.py:54: in test_change_classification
+    mutate(head)
+tests/test_07_contract_validator.py:35: in <lambda>
+    (lambda c: col(c, "account_status").update(name="status"), ("column_removed", True)),
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_07_contract_validator.py:26: in col
+    return next(x for x in c["schema"]["columns"] if x["name"] == name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   StopIteration
+________________ test_change_classification[<lambda>-expected2] ________________
+tests/test_07_contract_validator.py:55: in test_change_classification
+    assert expected in kinds(BASE, head)
+E   AssertionError: assert ('column_added', False) in set()
+E    +  where set() = kinds({'apiVersion': 'lumen.datacontract/v1', 'kind': 'DataContract', 'id': 'lumen.deposits.accounts', 'version': '1.1.0', ...}, {'apiVersion': 'lumen.datacontract/v1', 'kind': 'DataContract', 'id': 'lumen.deposits.accounts', 'version': '1.1.0', ...})
+__________________ test_breaking_change_with_minor_bump_fails __________________
+tests/test_07_contract_validator.py:72: in test_breaking_change_with_minor_bump_fails
+    head = _with("1.1.0", lambda c: col(c, "account_status").update(name="status"))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_07_contract_validator.py:61: in _with
+    mutate(head)
+tests/test_07_contract_validator.py:72: in <lambda>
+    head = _with("1.1.0", lambda c: col(c, "account_status").update(name="status"))
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_07_contract_validator.py:26: in col
+    return next(x for x in c["schema"]["columns"] if x["name"] == name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   StopIteration
+__________ test_breaking_change_with_major_bump_but_no_signoff_fails ___________
+tests/test_07_contract_validator.py:78: in test_breaking_change_with_major_bump_but_no_signoff_fails
+    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_07_contract_validator.py:61: in _with
+    mutate(head)
+tests/test_07_contract_validator.py:78: in <lambda>
+    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"))
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_07_contract_validator.py:26: in col
+    return next(x for x in c["schema"]["columns"] if x["name"] == name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   StopIteration
+_________ test_breaking_change_with_major_bump_and_full_signoff_passes _________
+tests/test_07_contract_validator.py:85: in test_breaking_change_with_major_bump_and_full_signoff_passes
+    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"),
+tests/test_07_contract_validator.py:61: in _with
+    mutate(head)
+tests/test_07_contract_validator.py:85: in <lambda>
+    head = _with("2.0.0", lambda c: col(c, "account_status").update(name="status"),
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_07_contract_validator.py:26: in col
+    return next(x for x in c["schema"]["columns"] if x["name"] == name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   StopIteration
+____________________ test_additive_change_needs_minor_bump _____________________
+tests/test_07_contract_validator.py:95: in test_additive_change_needs_minor_bump
+    assert _status(f_none, "semver.sufficient_bump") == ["fail"]
+E   AssertionError: assert [] == ['fail']
+E     
+E     Right contains one more item: 'fail'
+E     Use -v to get more diff
+_____________________ test_cli_exits_nonzero_on_stale_data _____________________
+tests/test_07_contract_validator.py:138: in test_cli_exits_nonzero_on_stale_data
+    assert fresh == 0
+E   assert 1 == 0
+----------------------------- Captured stdout call -----------------------------
+
+=== CONTRACT VALIDATION: /home/claude/lumen-deposits-controls/contracts/accounts.yml ===
+
+[CONTRACT]
+  ... 1/1 checks passed
+
+[DATA]
+  FAIL  schema.missing_columns             missing: ['status', 'region']
+  FAIL  schema.unexpected_columns          uncontracted columns published: ['account_status']
+  ... 28/30 checks passed
+
+[POLICY]
+  ... 1/1 checks passed
+
+RESULT: FAILED (exit 1: data)
+
+=== CONTRACT VALIDATION: /home/claude/lumen-deposits-controls/contracts/accounts.yml ===
+
+[CONTRACT]
+  ... 1/1 checks passed
+
+[DATA]
+  FAIL  schema.missing_columns             missing: ['status', 'region']
+  FAIL  schema.unexpected_columns          uncontracted columns published: ['account_status']
+  FAIL  freshness                          latest _loaded_at=2026-01-01 05:00:00 age=27.0h (warn>24h, error>26h)
+  ... 27/30 checks passed
+
+[POLICY]
+  ... 1/1 checks passed
+
+RESULT: FAILED (exit 1: data)
+--- generated xml file: /home/claude/lumen-deposits-controls/build/junit.xml ---
+=========================== short test summary info ============================
+FAILED tests/test_02_primary_keys.py::test_primary_key_unique[accounts[account_id]]
+FAILED tests/test_06_grain_reconciliation.py::test_enrichment_preserves_account_cardinality
+FAILED tests/test_06_grain_reconciliation.py::test_mart_reconciles_to_ledger_every_day
+FAILED tests/test_07_contract_validator.py::test_change_classification[<lambda>-expected1]
+FAILED tests/test_07_contract_validator.py::test_change_classification[<lambda>-expected2]
+FAILED tests/test_07_contract_validator.py::test_breaking_change_with_minor_bump_fails
+FAILED tests/test_07_contract_validator.py::test_breaking_change_with_major_bump_but_no_signoff_fails
+FAILED tests/test_07_contract_validator.py::test_breaking_change_with_major_bump_and_full_signoff_passes
+FAILED tests/test_07_contract_validator.py::test_additive_change_needs_minor_bump
+FAILED tests/test_07_contract_validator.py::test_cli_exits_nonzero_on_stale_data
+======================== 10 failed, 95 passed in 1.34s =========================
+<jemalloc>: Out-of-range conf value: narenas:0
+
+---------------- job: contract-validation ----------------
+Change-policy base: main:contracts/accounts.yml (version 1.0.0)
+<jemalloc>: Out-of-range conf value: narenas:0
+
+=== CONTRACT VALIDATION: contracts/accounts.yml ===
+
+[CONTRACT]
+  ... 1/1 checks passed
+
+[DATA]
+  FAIL  primary_key.unique                 954 duplicated keys (954 surplus rows of 5436)
+  ... 33/34 checks passed
+
+[POLICY]
+  FAIL  semver.sufficient_bump             1.0.0 -> 1.1.0 (minor); changes require: major. BREAKING: ['column_removed(account_status)']. Breaking changes need a MAJOR bump, a 30-day deprecation window, a changelog migration note and consumer sign-off.
+  ... 0/1 checks passed
+
+[CHANGES vs BASE]
+  BREAKING  column_removed             account_status   column no longer published (renames appear as remove + add)
+  additive  column_added               region           new column type VARCHAR
+  additive  column_added               status           new column type VARCHAR
+
+RESULT: FAILED (exit 3: data, change-policy)
+
+================ GATE SUMMARY ================
+layered-tests        FAIL (exit 1)
+contract-validation  FAIL (exit 3)
+gate                 FAIL -> merge blocked

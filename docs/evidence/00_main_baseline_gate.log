@@ -1,0 +1,68 @@
+================ DATA-QUALITY GATE (base: origin/main) ================
+Generated as_of=2026-10-10: branches=51, customers=3,000, accounts=4,503, daily_balances=270,124
+<jemalloc>: Out-of-range conf value: narenas:0
+  built models/staging/01_stg_branches.sql
+  built models/staging/02_stg_customers.sql
+  built models/staging/03_stg_accounts.sql
+  built models/staging/04_stg_daily_balances.sql
+  built models/marts/10_accounts.sql
+  built models/marts/20_exceptions_balance_spikes.sql
+  built models/marts/30_fct_branch_deposits_daily.sql
+  accounts                       4,482
+  dq_issues                          2
+  exceptions_balance_spikes         10
+  fct_branch_deposits_daily      2,520
+  quarantine_accounts               18
+  quarantine_daily_balances      1,207
+  raw_accounts                   4,503
+  raw_branches                      51
+  raw_customers                  3,000
+  raw_daily_balances           270,124
+  stg_accounts                   4,482
+  stg_branch_history                51
+  stg_branches                      42
+  stg_customers                  3,000
+  stg_daily_balances           268,917
+
+---------------- job: layered-tests ----------------
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/claude/lumen-deposits-controls
+configfile: pytest.ini
+testpaths: tests
+collected 105 items
+
+tests/test_00_detector_calibration.py ..........                         [  9%]
+tests/test_01_schema_types.py ................                           [ 24%]
+tests/test_02_primary_keys.py ..........                                 [ 34%]
+tests/test_03_not_null.py .........................                      [ 58%]
+tests/test_04_relationships.py ...........                               [ 68%]
+tests/test_05_business_rules.py ....                                     [ 72%]
+tests/test_06_grain_reconciliation.py ....                               [ 76%]
+tests/test_07_contract_validator.py .........................            [100%]
+
+--- generated xml file: /home/claude/lumen-deposits-controls/build/junit.xml ---
+============================= 105 passed in 1.32s ==============================
+<jemalloc>: Out-of-range conf value: narenas:0
+
+---------------- job: contract-validation ----------------
+No base for contracts/accounts.yml at 'origin/main' -> policy diff skipped
+<jemalloc>: Out-of-range conf value: narenas:0
+
+=== CONTRACT VALIDATION: contracts/accounts.yml ===
+
+[CONTRACT]
+  ... 1/1 checks passed
+
+[DATA]
+  ... 33/33 checks passed
+
+[POLICY]
+  ... 1/1 checks passed
+
+RESULT: PASSED
+
+================ GATE SUMMARY ================
+layered-tests        PASS (exit 0)
+contract-validation  PASS (exit 0)
+gate                 PASS -> mergeable

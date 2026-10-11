@@ -19,7 +19,9 @@ vc = importlib.util.module_from_spec(_spec)
 sys.modules["validate_contract"] = vc
 _spec.loader.exec_module(vc)
 
-BASE = yaml.safe_load((ROOT / "contracts/accounts.yml").read_text())
+# Frozen fixture: validator tests must not depend on the working-tree contract under review.
+FIXTURE = ROOT / "tests/fixtures/accounts_contract_v1.yml"
+BASE = yaml.safe_load(FIXTURE.read_text())
 
 
 def col(c, name):
@@ -124,7 +126,7 @@ def tiny_warehouse(tmp_path):
 
 
 def test_cli_exits_nonzero_on_data_violation(tiny_warehouse):
-    code = vc.main(["--contract", str(ROOT / "contracts/accounts.yml"), "--warehouse", str(tiny_warehouse),
+    code = vc.main(["--contract", str(FIXTURE), "--warehouse", str(tiny_warehouse),
                     "--now", "2026-01-01T06:00:00"])
     assert code & vc.EXIT_DATA
 
@@ -133,7 +135,7 @@ def test_cli_exits_nonzero_on_stale_data(tiny_warehouse):
     con = duckdb.connect(str(tiny_warehouse))
     con.execute("create or replace table accounts as select * replace ('ACC-' || lpad((row_number() over ())::varchar, 7, '0') as account_id) from accounts")
     con.close()
-    fresh = vc.main(["--contract", str(ROOT / "contracts/accounts.yml"), "--warehouse", str(tiny_warehouse), "--now", "2026-01-01T06:00:00"])
-    stale = vc.main(["--contract", str(ROOT / "contracts/accounts.yml"), "--warehouse", str(tiny_warehouse), "--now", "2026-01-02T08:00:00"])
+    fresh = vc.main(["--contract", str(FIXTURE), "--warehouse", str(tiny_warehouse), "--now", "2026-01-01T06:00:00"])
+    stale = vc.main(["--contract", str(FIXTURE), "--warehouse", str(tiny_warehouse), "--now", "2026-01-02T08:00:00"])
     assert fresh == 0
     assert stale & vc.EXIT_DATA
