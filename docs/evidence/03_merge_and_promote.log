@@ -1,0 +1,43 @@
+$ git log --oneline --graph
+*   38dea72 Merge PR #1: feat(accounts): add branch region (contract 1.1.0)
+|\  
+| * 38f97c0 fix(accounts): join current branch version only; keep account_status; contract 1.1.0 additive
+| * f83996b feat(accounts): add branch region; rename account_status -> status
+|/  
+* 8a7f5b5 test: make validator unit tests hermetic (frozen contract fixture)
+* ca308b8 Controls: synthetic data, layered tests, accounts contract v1.0.0, CI gate
+
+=== promote-to-staging: gate re-run on merge commit 38dea72 (base = github.event.before = 8a7f5b5) ===
+---------------- job: contract-validation ----------------
+Change-policy base: 8a7f5b51791acdf6f22c281a7a9d3f772c7e8b8a:contracts/accounts.yml (version 1.0.0)
+
+=== CONTRACT VALIDATION: contracts/accounts.yml ===
+
+[CONTRACT]
+  ... 1/1 checks passed
+
+[DATA]
+  ... 35/35 checks passed
+
+[POLICY]
+  ... 1/1 checks passed
+
+[CHANGES vs BASE]
+  additive  column_added               region           new column type VARCHAR
+
+RESULT: PASSED
+
+================ GATE SUMMARY ================
+layered-tests        PASS (exit 0)
+contract-validation  PASS (exit 0)
+gate                 PASS -> mergeable
+
+=== promote ===
+[staging] promoted staging-20261011T153000Z-38dea72 (git 38dea72, contracts {'accounts': '1.1.0'}); previous=staging-20261011T150000Z-8a7f5b5
+
+=== post-promotion smoke check (contract vs promoted release) ===
+RESULT: PASSED
+
+[staging] CURRENT = staging-20261011T153000Z-38dea72
+  2026-10-11T18:42:22Z  promote  staging-20261011T150000Z-8a7f5b5             prev=None  initial release
+  2026-10-11T18:42:26Z  promote  staging-20261011T153000Z-38dea72             prev=staging-20261011T150000Z-8a7f5b5  merge PR #1

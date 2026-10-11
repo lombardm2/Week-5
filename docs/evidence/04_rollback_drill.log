@@ -1,0 +1,33 @@
+=== Guardrail: rollback without a reason is refused ===
+--reason is required for rollback (incident ticket / explanation)
+exit=1
+
+=== Guardrail: rollback to a release that does not exist is refused ===
+no valid rollback target (requested='staging-20990101T000000Z-deadbee'); available: ['staging-20261011T150000Z-8a7f5b5', 'staging-20261011T153000Z-38dea72']
+exit=1
+
+=== Contract impact of rolling back (warn mode: what consumers would lose vs current main) ===
+[POLICY]
+  WARN  semver.direction                   version decreased: 1.1.0 -> 1.0.0 (downgrade); changes require: major
+  ... 0/1 checks passed
+
+[CHANGES vs BASE]
+  BREAKING  column_removed             region           column no longer published (renames appear as remove + add)
+
+RESULT: PASSED
+
+=== Rollback: atomic pointer swap to the previously served release (no rebuild) ===
+[staging] ROLLED BACK staging-20261011T153000Z-38dea72 -> staging-20261011T150000Z-8a7f5b5 (git 8a7f5b5, contracts {'accounts': '1.0.0'})
+exit=0
+
+=== Smoke check of the restored release against ITS OWN contract (v1.0.0) ===
+RESULT: PASSED
+
+=== Roll forward again ===
+[staging] ROLLED BACK staging-20261011T150000Z-8a7f5b5 -> staging-20261011T153000Z-38dea72 (git 38dea72, contracts {'accounts': '1.1.0'})
+
+[staging] CURRENT = staging-20261011T153000Z-38dea72
+  2026-10-11T18:42:22Z  promote  staging-20261011T150000Z-8a7f5b5             prev=None  initial release
+  2026-10-11T18:42:26Z  promote  staging-20261011T153000Z-38dea72             prev=staging-20261011T150000Z-8a7f5b5  merge PR #1
+  2026-10-11T18:42:37Z  rollback staging-20261011T150000Z-8a7f5b5             prev=staging-20261011T153000Z-38dea72  INC-0042 drill: verify rollback path
+  2026-10-11T18:42:37Z  rollback staging-20261011T153000Z-38dea72             prev=staging-20261011T150000Z-8a7f5b5  INC-0042 drill complete: roll forward
