@@ -1,14 +1,18 @@
 -- PUBLISHED INTERFACE. Governed by contracts/accounts.yml.
--- Any change to columns, types, nullability or allowed values here is a contract change.
+-- Region comes from stg_branches (current version only: unique on branch_id), so this
+-- join cannot change row count. test_enrichment_preserves_account_cardinality proves it.
 create or replace table accounts as
 select
-    account_id,
-    customer_id,
-    branch_id,
-    account_type,
-    account_status,
-    open_date,
-    interest_rate,
-    currency,
-    _loaded_at
-from stg_accounts;
+    a.account_id,
+    a.customer_id,
+    a.branch_id,
+    a.account_type,
+    a.account_status,
+    a.open_date,
+    a.interest_rate,
+    a.currency,
+    a._loaded_at,
+    b.region
+from stg_accounts a
+join stg_branches b
+    on a.branch_id = b.branch_id;
